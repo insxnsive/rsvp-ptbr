@@ -1,0 +1,52 @@
+{
+  "name": "rsvp-production-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "tsx watch src/server/index.ts",
+    "dev:web": "vite --host 127.0.0.1 --port 5173",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node dist/server/server/index.js",
+    "typecheck": "tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "hash:password": "tsx src/server/scripts/hash-password.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "latest",
+    "@fastify/helmet": "latest",
+    "@fastify/multipart": "latest",
+    "@fastify/rate-limit": "latest",
+    "@fastify/static": "latest",
+    "@tailwindcss/vite": "latest",
+    "@zxing/browser": "^0.1.5",
+    "fastify": "latest",
+    "lucide-preact": "latest",
+    "mongodb": "latest",
+    "preact": "latest",
+    "qrcode": "latest",
+    "tailwindcss": "latest",
+    "xlsx": "latest"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "@preact/preset-vite": "latest",
+    "@testing-library/preact": "latest",
+    "@types/node": "latest",
+    "@types/qrcode": "latest",
+    "eslint": "latest",
+    "jsdom": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "typescript-eslint": "latest",
+    "vite": "latest",
+    "vitest": "latest"
+  }
+}
