@@ -1,119 +1,233 @@
 # RSVP
+RSVP is an event guest management application.
 
-Eu construí este projeto para resolver um fluxo completo de RSVP de eventos com check-in na entrada, sem separar frontend e backend em apps diferentes. A ideia é ter:
+An administrator can create events and manage guest lists.
+Guests can confirm attendance on a public event page.
+The application creates a signed QR code after confirmation.
+An administrator can use the QR code for event check-in.
 
-- painel administrativo protegido para criar e operar eventos;
-- página pública por slug para convidado confirmar presença;
-- QR Code assinado para check-in;
-- check-in manual e por QR no mesmo painel de operação.
+## Main Functions
+- Create, change, and delete events.
+- Add, change, delete, and import guests.
+- Search guests without accent marks.
+- Confirm attendance from a public event link.
+- Create and download a QR code for each confirmed guest.
+- Register a check-in by QR code or by manual selection.
+- Undo a check-in.
+- Show event and group statistics.
 
-Não é um boilerplate genérico: os fluxos de RSVP, confirmação de convidado, importação de lista e validação de entrada estão codificados de ponta a ponta.
+The application uses one administrator account.
+It does not provide user accounts, roles, password reset, or event restore.
 
-## Stack e por que cada peça está aqui
+## System Design
 
-- Preact: UI leve com API compatível com React para telas de admin, RSVP público e check-in.
-- Vite: dev server rápido, build do cliente e proxy para API em desenvolvimento.
-- Tailwind CSS (via @tailwindcss/vite): estilos utilitários e design system simples direto no código.
-- Fastify: servidor HTTP da API com plugins de segurança e multipart.
-- MongoDB Driver: persistência principal com índices explícitos e operações simples.
-- XLSX: importação de convidados por planilha/csv.
-- @zxing/browser: leitura de QR pela câmera no navegador.
-- qrcode: geração do PNG de QR para o convidado.
-- TypeScript: contratos compartilhados e tipagem forte no cliente/servidor.
-- Vitest + Testing Library + jsdom: testes de API, funções de domínio e um smoke test da UI.
-- ESLint + typescript-eslint: consistência de padrões e regras de TS (inclusive banindo any explícito).
+The server is a Fastify application.
+The client is a Preact single-page application.
+Vite builds the client files.
+MongoDB stores events, guests, and check-in logs.
 
-Arquivos de configuração relevantes:
+The production server serves the API and the built client files.
+The development client uses a proxy for `/api` requests.
 
-- vite.config.ts: plugins Preact/Tailwind, proxy de /api para 127.0.0.1:8080, build em dist/client, ambiente de teste jsdom.
-- tsconfig.server.json: build de backend para dist/server em NodeNext.
-- tsconfig.client.json: tipagem do cliente + shared + testes tsx.
-- eslint.config.js: baseline JS/TS + regras específicas para o projeto.
-- scripts/dev.mjs: sobe API e web em paralelo, com tratamento de encerramento para Windows e Unix.
+| Part | Location | Purpose |
+| Server | `src/server` | API routes, authentication, storage, QR code validation, and imports. |
+| Client | `src/client` | Administrator pages, public RSVP page, and QR scanner. |
+| Shared | `src/shared` | Domain types and text normalization. |
+| Tests | `tests` | API, client, QR, import, configuration, and normalization tests. |
 
-## Arquitetura
+`AppStore` defines the storage interface.
+`MongoStore` is the production implementation.
+`MemoryStore` supports API tests.
 
-### src/server
+## Requirements
 
-- index.ts: bootstrap. Carrega config, cria store Mongo, monta app Fastify e faz listen.
-- config.ts: carrega .env quando existir, valida obrigatoriedade de variáveis e segredos mínimos (>= 32 chars).
-- app.ts: compõe a aplicação Fastify, registra plugins de segurança, rotas e static files.
-- db.ts: cria MongoClient, conecta e garante índices.
-- store.ts: contrato de persistência (AppStore) e estatísticas.
-- mongoStore.ts: implementa AppStore no MongoDB.
-- memoryStore.ts: implementa AppStore em memória (usado nos testes de API).
-- auth.ts: hash/verificação de senha com scrypt e sessão assinada por HMAC em cookie.
-- qr.ts: assinatura/validação de token QR + nonce estável por convidado.
-- importGuests.ts: parser de planilha com normalização de cabeçalho e validação por linha.
-- routes/: separa domínios de endpoint (auth, events, public, checkins) e helpers comuns.
+- Node.js 22 or later.
+- A MongoDB database.
+- An administrator user name and password hash.
+- Two secret values with at least 32 characters each.
 
-### src/client
+## Install and Configure
 
-- App.tsx: concentra roteamento por window.location.pathname e os principais fluxos de UI.
-- api.ts: camada única de chamada HTTP, com tratamento padronizado de erro.
-- types.ts: contratos do cliente para requests/responses.
-- components/QrCodeCard.tsx: renderiza QR em data URL e permite baixar PNG.
-- components/ScannerPanel.tsx: modal fullscreen de scanner com ZXing.
-- styles.css: base visual e animações.
+Install the package dependencies.
 
-### src/shared
+```bash
+npm install
+```
 
-- types.ts: modelos compartilhados (evento, convidado, logs, stats, import).
-- normalize.ts: normalização de nome/cabeçalho/grupo para busca e importação.
+Create a `.env` file in the project root.
+```dotenv
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB=rsvp
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH=scrypt$...
+SESSION_SECRET=replace-with-a-secret-of-at-least-32-characters
+QR_SIGNING_SECRET=replace-with-a-different-secret-of-at-least-32-characters
+PUBLIC_BASE_URL=http://127.0.0.1:5173
+```
 
-### tests
+Generate the password hash with this command.
+```bash
+npm run hash:password
+```
 
-- api.test.ts: cobre autenticação, criação de evento, RSVP público, check-in QR, duplicidade e undo.
-- importGuests.test.ts, normalize.test.ts, qr.test.ts, config.test.ts: garantem comportamento de utilitários e validações de config.
-- clientApi.test.ts: confirma headers corretos da camada HTTP do cliente.
-- App.test.tsx: valida fluxo inicial de tela de login quando não autenticado.
+Set `ADMIN_PASSWORD_HASH` to the generated value.
 
-## Como as partes se conectam
+Do not use the example secret values in a deployed system.
 
-1. Admin autentica em /api/auth/login e recebe cookie HTTP-only assinado.
-2. Admin cria evento em /api/events; backend gera slug aleatório único.
-3. Admin cadastra convidados manualmente ou via importação (/api/events/:id/guests/import).
-4. Convidado acessa a URL pública (/<slug>), busca nome e confirma presença.
-5. Backend grava RSVP e retorna token QR assinado.
-6. No check-in (/rsvp-confirm), operador valida entrada manualmente ou por QR.
-7. Cada check-in cria log (checkinLogs) e atualiza estatísticas em tempo real.
+## Configuration
+| Variable | Required | Description |
+| --- | --- | --- |
+| `MONGODB_URI` | Yes | MongoDB connection string. |
+| `MONGODB_DB` | Yes | MongoDB database name. |
+| `ADMIN_USERNAME` | Yes | Name for the administrator account. |
+| `ADMIN_PASSWORD_HASH` | Yes | Scrypt password hash. |
+| `SESSION_SECRET` | Yes | Session signing secret. It must contain at least 32 characters. |
+| `QR_SIGNING_SECRET` | Yes | QR signing secret. It must contain at least 32 characters. |
+| `PUBLIC_BASE_URL` | Yes | Public base URL for event links. |
+| `HOST` | No | Server bind address. The default is `0.0.0.0`. |
+| `PORT` | No | Server port. The default is `8080`. |
+| `NODE_ENV` | No | Use `production` for deployed systems. |
 
-## Decisões de implementação que importam
+The server loads `.env` when the file exists.
+The server removes one final slash from `PUBLIC_BASE_URL`.
 
-- Contrato de persistência por interface (AppStore): as rotas não dependem de Mongo diretamente. Isso simplifica teste isolado com MemoryStore.
-- Soft delete para evento/convidado: exclusão não remove documento, apenas marca timestamp (deletedAt).
-- Busca accent-insensitive: nomes são normalizados e indexados (normalizedName) para busca previsível em português.
-- RSVP não gera QR arbitrário por request: nonce estável por par eventId+guestId e hash armazenado no convidado para bloquear token substituído.
-- Check-in com detecção de duplicidade: segunda leitura do mesmo convidado não falha, mas sinaliza duplicate: true.
-- Importação com dry-run: revisa erros antes de inserir, no mesmo endpoint com dryRun.
-- Sem biblioteca de roteamento no cliente: o app usa pathname diretamente (/rsvp, /rsvp-confirm, /<slug>), mantendo deploy simples em origem única.
+## Run the Application
 
-## Segurança e operação
-
-- Helmet com CSP definida explicitamente.
-- Rate limit global e rate limit mais restrito no login.
-- Cookie de sessão com httpOnly, sameSite=strict e secure em produção.
-- Upload multipart limitado a 1 arquivo e 5 MB.
-- Segredos de sessão e QR obrigatoriamente longos.
-- Build de produção serve frontend estático e API no mesmo processo Fastify.
-
-## Pontos não óbvios para primeira leitura
-
-- O servidor só registra static files se encontrar index.html no caminho esperado de build; sem build do cliente, ele atua só como API.
-- O projeto está preparado para um único usuário admin definido por variável de ambiente (não existe entidade de usuário no banco).
-- Existe estrutura de logs de check-in, mas neste código não há endpoint para listá-los.
-- O README anterior menciona secret manager em produção, mas o código também carrega .env local automaticamente quando o arquivo existe.
-
-## Comandos realmente usados neste projeto
+Start the API server and the client development server.
 
 ```bash
 npm run dev
+```
+
+Use `http://127.0.0.1:5173` for the client.
+The API server listens on port `8080`.
+
+Build the application for production.
+
+```bash
 npm run build
+```
+
+Start the production server after the build completes.
+
+```bash
 npm start
+```
+
+The build creates `dist/client` and `dist/server`.
+
+## Application Pages
+
+| Path | Access | Purpose |
+| --- | --- | --- |
+| `/rsvp` | Administrator | Manage events and guests. |
+| `/rsvp-confirm` | Administrator | Register and undo check-ins. |
+| `/:slug` | Public | Search guests and confirm attendance. |
+
+The public page returns no guests until the search has two characters.
+The public search returns no more than 20 guests.
+
+## Administrator Workflow
+
+1. Sign in on an administrator page.
+2. Create an event.
+3. Add guests or import a guest file.
+4. Give the public event link to guests.
+5. Open the check-in page during the event.
+6. Scan QR codes or select guests for manual check-in.
+
+The system stores deleted events and guests as soft-deleted records.
+The system does not provide a restore operation.
+
+## Guest Import
+
+The import route accepts XLSX and CSV files.
+The upload limit is one file with a maximum size of 5 MB.
+
+Use one name column and one optional group column.
+The name column can use these headings:
+
+- `Convidados`
+- `Convidado`
+- `Nome`
+- `Nomedoconvidado`
+
+The group column can use these headings:
+
+- `Grupo`
+- `Tipo`
+- `Categoria`
+
+Valid groups are `adulto` and `crianca`.
+The importer also accepts plural group names.
+
+The import operation uses preview mode by default.
+Send `dryRun=false` only after you resolve all reported row errors.
+
+## QR Code and Check-In
+
+The system creates a signed QR token after guest confirmation.
+The token includes the event ID, guest ID, and a stable guest nonce.
+
+The server verifies the token signature during QR check-in.
+It also verifies the event ID and guest nonce.
+This process rejects a changed or substituted token.
+
+The system records duplicate scans without changing the first check-in time.
+Each manual check-in, QR check-in, and undo operation creates a log record.
+
+## API Summary
+
+All API routes start with `/api`.
+
+| Route | Access | Purpose |
+| --- | --- | --- |
+| `POST /auth/login` | Public | Create an administrator session. |
+| `GET /auth/session` | Public | Get the current session state. |
+| `POST /auth/logout` | Public | Delete the session cookie. |
+| `GET`, `POST /events` | Administrator | List or create events. |
+| `PATCH`, `DELETE /events/:id` | Administrator | Change or delete an event. |
+| `GET`, `POST /events/:id/guests` | Administrator | List or add guests. |
+| `PATCH`, `DELETE /events/:id/guests/:guestId` | Administrator | Change or delete a guest. |
+| `POST /events/:id/guests/import` | Administrator | Preview or import a guest file. |
+| `POST /events/:id/checkins/manual` | Administrator | Register a manual check-in. |
+| `POST /events/:id/checkins/qr` | Administrator | Register a QR check-in. |
+| `DELETE /events/:id/checkins/:guestId` | Administrator | Undo a check-in. |
+| `GET /public/events/:slug` | Public | Get public event information. |
+| `GET /public/events/:slug/guests` | Public | Search public guests. |
+| `POST /public/events/:slug/confirm` | Public | Confirm a guest and get a QR token. |
+
+Administrator routes require the `rsvp_session` cookie.
+The cookie is HTTP-only and uses `SameSite=Strict`.
+The production cookie also uses the `Secure` attribute.
+The session expires after 12 hours.
+
+## Security and Limits
+
+- The server uses Helmet security headers.
+- The server allows 120 requests per minute by default.
+- The login route allows five requests per minute.
+- The request body limit is 1 MB.
+- The server does not enable CORS.
+- Event and guest text has server-side length validation.
+- MongoDB stores indexes for event, guest, and check-in queries.
+
+Use HTTPS for every deployed system.
+
+## Quality Checks
+
+Run these commands before deployment.
+
+```bash
 npm run typecheck
 npm run lint
 npm test
-npm run hash:password -- "sua-senha"
+npm run build
 ```
 
-Variáveis esperadas estão em .env.example.
+The test suite uses an in-memory store for API tests.
+The suite does not require a MongoDB instance.
+
+## License
+
+See [LICENSE](LICENSE).
