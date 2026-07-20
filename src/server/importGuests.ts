@@ -11,15 +11,21 @@ function asCell(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }
-  return String(value).trim();
+  return String(value).replace(/\0/g, "").trim();
 }
 
 export function parseGuestWorkbook(buffer: Buffer, filename: string): ImportPreview {
   const errors: ImportGuestError[] = [];
   let workbook: XLSX.WorkBook;
 
+  const isCsv = /\.csv$/i.test(filename);
+
   try {
-    workbook = XLSX.read(buffer, { type: "buffer", raw: false });
+    workbook = XLSX.read(buffer, {
+      type: "buffer",
+      raw: false,
+      codepage: isCsv ? 65001 : undefined
+    });
   } catch {
     return {
       validRows: [],

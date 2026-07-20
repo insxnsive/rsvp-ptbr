@@ -2,23 +2,34 @@ import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { createMongoStore } from "./db.js";
 
-async function main(): Promise<void> {
-  let app: Awaited<ReturnType<typeof buildApp>> | undefined;
+let runningApp: Awaited<ReturnType<typeof buildApp>> | undefined;
 
+async function main(): Promise<void> {
   try {
     const config = loadConfig();
     const store = await createMongoStore(config);
-    app = await buildApp({ config, store });
-    await app.listen({ host: config.host, port: config.port });
+    runningApp = await buildApp({ config, store });
+    await runningApp.listen({ host: config.host, port: config.port });
   } catch (error) {
-    if (app) {
-      app.log.error(error);
-      await app.close();
+    if (runningApp) {
+      runningApp.log.error(error);
+      await runningApp.close();
     } else {
       console.error(error);
     }
     process.exit(1);
   }
 }
+
+async function shutdown(signal: string) {
+  console.log(`${signal} received, shutting down...`);
+  if (runningApp) {
+    await runningApp.close();
+  }
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
 
 await main();

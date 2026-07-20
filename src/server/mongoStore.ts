@@ -42,8 +42,10 @@ export class MongoStore implements AppStore {
 
   async ensureIndexes(): Promise<void> {
     await Promise.all([
+      this.events.createIndex({ id: 1 }),
       this.events.createIndex({ slug: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } }),
       this.events.createIndex({ createdAt: -1 }),
+      this.guests.createIndex({ id: 1 }),
       this.guests.createIndex({ eventId: 1, normalizedName: 1, deletedAt: 1 }),
       this.guests.createIndex({ eventId: 1, group: 1, deletedAt: 1 }),
       this.checkinLogs.createIndex({ eventId: 1, createdAt: -1 }),
@@ -88,9 +90,10 @@ export class MongoStore implements AppStore {
   }
 
   async softDeleteEvent(id: string): Promise<boolean> {
+    const now = nowIso();
     const result = await this.events.updateOne(
       { id, deletedAt: { $exists: false } },
-      { $set: { deletedAt: nowIso(), updatedAt: nowIso() } }
+      { $set: { deletedAt: now, updatedAt: now } }
     );
     return result.modifiedCount === 1;
   }
@@ -133,7 +136,7 @@ export class MongoStore implements AppStore {
       filter.group = options.group;
     }
     if (options?.search) {
-      filter.normalizedName = { $regex: escapeRegex(normalizeName(options.search)), $options: "i" };
+      filter.normalizedName = { $regex: escapeRegex(normalizeName(options.search)) };
     }
     const cursor = this.guests.find(filter).sort({ normalizedName: 1 });
     if (typeof options?.limit === "number") {
@@ -159,9 +162,10 @@ export class MongoStore implements AppStore {
   }
 
   async softDeleteGuest(id: string): Promise<boolean> {
+    const now = nowIso();
     const result = await this.guests.updateOne(
       { id, deletedAt: { $exists: false } },
-      { $set: { deletedAt: nowIso(), updatedAt: nowIso() } }
+      { $set: { deletedAt: now, updatedAt: now } }
     );
     return result.modifiedCount === 1;
   }
@@ -224,18 +228,28 @@ export class MongoStore implements AppStore {
   }
 
   async getEventStats(eventId: string) {
-    const stats = emptyStats();
-    const guests = await this.listGuests(eventId);
-    for (const guest of guests) {
-      stats.totalGuests += 1;
-      stats.byGroup[guest.group].total += 1;
-      if (guest.rsvpAt) {
-        stats.rsvped += 1;
-        stats.byGroup[guest.group].rsvped += 1;
+    const pipeline = [
+      { $match: { eventId, deletedAt: { $exists: false } } },
+      {
+        $group: {
+          _id: "$group",
+          total: { $sum: 1 },
+          rsvped: { $sum: { $cond: [{ $ifNull: ["$rsvpAt", false] }, 1, 0] } },
+          checkedIn: { $sum: { $cond: [{ $ifNull: ["$checkedInAt", false] }, 1, 0] } }
+        }
       }
-      if (guest.checkedInAt) {
-        stats.checkedIn += 1;
-        stats.byGroup[guest.group].checkedIn += 1;
+    ];
+    const results = await this.guests.aggregate(pipeline).toArray();
+    const stats = emptyStats();
+    for (const row of results) {
+      const group = row._id as "adulto" | "crianca";
+      stats.totalGuests += row.total;
+      stats.rsvped += row.rsvped;
+      stats.checkedIn += row.checkedIn;
+      if (stats.byGroup[group]) {
+        stats.byGroup[group].total = row.total;
+        stats.byGroup[group].rsvped = row.rsvped;
+        stats.byGroup[group].checkedIn = row.checkedIn;
       }
     }
     return stats;

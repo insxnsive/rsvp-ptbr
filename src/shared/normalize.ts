@@ -19,12 +19,7 @@ export function normalizeGuestGroup(value: string): GuestGroup | null {
   if (normalized === "adulto" || normalized === "adultos") {
     return "adulto";
   }
-  if (
-    normalized === "crianca" ||
-    normalized === "criancas" ||
-    normalized === "criança" ||
-    normalized === "crianças"
-  ) {
+  if (normalized === "crianca" || normalized === "criancas") {
     return "crianca";
   }
   return null;

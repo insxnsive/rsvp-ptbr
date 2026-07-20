@@ -11,6 +11,8 @@ type Props = {
 
 export default function ScannerPanel({ active, onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function ScannerPanel({ active, onScan, onClose }: Props) {
             if (result && !disposed && !handled) {
               handled = true;
               currentControls.stop();
-              onScan(result.getText());
+              onScanRef.current(result.getText());
               return;
             }
             if (scanError && !(scanError instanceof NotFoundException) && !disposed) {
@@ -67,15 +69,15 @@ export default function ScannerPanel({ active, onScan, onClose }: Props) {
       disposed = true;
       controls?.stop();
     };
-  }, [active, onScan]);
+  }, [active]);
 
   if (!active) {
     return null;
   }
 
   return (
-    <section class="animate-fade fixed inset-0 z-50 bg-black/92">
-      <div class="animate-sheet relative flex h-full flex-col">
+    <section class="animate-fade fixed inset-0 z-50 h-[100dvh] w-[100dvw] overflow-hidden bg-black/92">
+      <div class="animate-sheet relative flex h-full min-h-[100svh] flex-col">
         <div class="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 px-4 py-5 text-white">
           <div class="flex items-center gap-2 text-sm font-semibold">
             <Camera size={18} aria-hidden="true" />

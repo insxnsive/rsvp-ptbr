@@ -24,6 +24,10 @@ export default function QrCodeCard({ token, guestName }: Props) {
       if (active) {
         setDataUrl(url);
       }
+    }).catch(() => {
+      if (active) {
+        setDataUrl("");
+      }
     });
     return () => {
       active = false;

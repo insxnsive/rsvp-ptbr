@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { hashQrNonce, verifyQrToken } from "../qr.js";
 import { getIdParam, requireAdmin, type RouteContext } from "./helpers.js";
 
@@ -112,7 +113,9 @@ export async function registerCheckinRoutes(app: FastifyInstance, context: Route
         return reply.code(400).send({ message: "QRCode ainda nao confirmado." });
       }
       const nonceHash = hashQrNonce(claims.nonce, context.config.qrSigningSecret);
-      if (nonceHash !== guest.qrNonceHash) {
+      const expected = Buffer.from(guest.qrNonceHash);
+      const actual = Buffer.from(nonceHash);
+      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
         return reply.code(400).send({ message: "QRCode foi substituido ou nao e valido." });
       }
       const result = await context.store.checkInGuest(guest.id, "qr");
