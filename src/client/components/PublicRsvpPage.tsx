@@ -1,12 +1,15 @@
+import { lazy, Suspense } from "preact/compat";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { CheckCircle2, Clock3, FileText, Heart, Search, Users } from "lucide-preact";
 import { api, ApiError } from "../api.js";
-import QrCodeCard from "./QrCodeCard.js";
+
 import Footer from "./Footer.js";
 import Countdown from "./Countdown.js";
 import { eventStartsAt, formatEventWindow, getInitials, groupLabel } from "../utils.js";
 import type { ConfirmResponse, PublicEvent, PublicGuestsResponse } from "../types.js";
 import type { PublicGuest } from "../../shared/types.js";
+
+const QrCodeCard = lazy(() => import("./QrCodeCard.js"));
 
 export default function PublicRsvpPage({ slug }: { slug: string }) {
   const [event, setEvent] = useState<PublicEvent | null>(null);
@@ -39,7 +42,7 @@ export default function PublicRsvpPage({ slug }: { slug: string }) {
     if (!debouncedSearch || !slug) return;
     const controller = new AbortController();
     api
-      .publicGuests(slug, debouncedSearch)
+      .publicGuests(slug, debouncedSearch, controller.signal)
       .then((response: PublicGuestsResponse) => {
         if (!controller.signal.aborted) setGuests(response.guests);
       })
@@ -197,9 +200,11 @@ export default function PublicRsvpPage({ slug }: { slug: string }) {
           ) : null}
 
           {confirmation ? (
-            <div class="mt-4">
-              <QrCodeCard token={confirmation.qrToken} guestName={confirmation.guest.name} />
-            </div>
+            <Suspense fallback={<div class="skeleton-block mt-4 aspect-square w-full" aria-label="Gerando QRCode" />}>
+              <div class="mt-4">
+                <QrCodeCard token={confirmation.qrToken} guestName={confirmation.guest.name} />
+              </div>
+            </Suspense>
           ) : null}
           {message ? <p class="mt-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">{message}</p> : null}
         </section>

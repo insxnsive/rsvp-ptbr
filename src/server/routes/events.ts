@@ -217,7 +217,7 @@ export async function registerEventRoutes(app: FastifyInstance, context: RouteCo
       return reply.code(400).send({ message: "Envie um arquivo Excel ou CSV." });
     }
     const query = request.query as { dryRun?: string };
-    const preview = parseGuestWorkbook(await file.toBuffer(), file.filename);
+    const preview = await parseGuestWorkbook(await file.toBuffer(), file.filename);
     const dryRun = query.dryRun !== "false";
     if (dryRun || preview.errors.length > 0) {
       const status = preview.errors.length > 0 && !dryRun ? 400 : 200;

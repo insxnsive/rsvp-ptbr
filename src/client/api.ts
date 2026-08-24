@@ -36,12 +36,23 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
     : init?.headers;
 
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT);
+  const externalSignal = init?.signal;
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, API_TIMEOUT);
 
   const requestInit: RequestInit = {
     credentials: "same-origin",
-    signal: controller.signal,
-    ...init
+    ...init,
+    signal: controller.signal
   };
   if (headers) {
     requestInit.headers = headers;
@@ -66,11 +77,14 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiError("Tempo limite da conexao.", 408);
+      throw timedOut
+        ? new ApiError("Tempo limite da conexao.", 408)
+        : new ApiError("Requisicao cancelada.", 0);
     }
     throw new ApiError("Falha na comunicacao com o servidor.", 0);
   } finally {
     window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
@@ -98,7 +112,7 @@ export const api = {
       body: JSON.stringify(form)
     }),
   deleteEvent: (id: string) => apiFetch<{ deleted: true }>(`/api/events/${encodePath(id)}`, { method: "DELETE" }),
-  guests: (eventId: string, search = "", group = "") => {
+  guests: (eventId: string, search = "", group = "", signal?: AbortSignal) => {
     const params = new URLSearchParams();
     if (search.trim()) {
       params.set("search", search.trim());
@@ -107,7 +121,7 @@ export const api = {
       params.set("group", group);
     }
     const suffix = params.toString() ? `?${params}` : "";
-    return apiFetch<GuestsResponse>(`/api/events/${encodePath(eventId)}/guests${suffix}`);
+    return apiFetch<GuestsResponse>(`/api/events/${encodePath(eventId)}/guests${suffix}`, { signal });
   },
   createGuest: (eventId: string, form: GuestForm) =>
     apiFetch<GuestsResponse>(`/api/events/${encodePath(eventId)}/guests`, {
@@ -127,8 +141,10 @@ export const api = {
     });
   },
   publicEvent: (slug: string) => apiFetch<{ event: PublicEvent }>(`/api/public/events/${encodePath(slug)}`),
-  publicGuests: (slug: string, search: string) =>
-    apiFetch<PublicGuestsResponse>(`/api/public/events/${encodePath(slug)}/guests?search=${encodeURIComponent(search)}`),
+  publicGuests: (slug: string, search: string, signal?: AbortSignal) =>
+    apiFetch<PublicGuestsResponse>(`/api/public/events/${encodePath(slug)}/guests?search=${encodeURIComponent(search)}`, {
+      signal
+    }),
   confirmPresence: (slug: string, guestId: string) =>
     apiFetch<ConfirmResponse>(`/api/public/events/${encodePath(slug)}/confirm`, {
       method: "POST",

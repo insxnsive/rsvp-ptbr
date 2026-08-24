@@ -26,8 +26,12 @@ export default function Toast({ message, variant = "success", onDismiss, duratio
   const Icon = variant === "success" ? CheckCircle2 : variant === "error" ? AlertCircle : CheckCircle2;
 
   return (
-    <div class="animate-slide-up fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
-      <div class={`flex items-center gap-3 rounded-xl ${bgClass} px-4 py-3 text-white shadow-lg`}>
+    <div class="toast-shell animate-slide-up fixed left-1/2 z-50 -translate-x-1/2">
+      <div
+        class={`flex items-center gap-3 rounded-xl ${bgClass} px-4 py-3 text-white shadow-lg`}
+        role={variant === "error" ? "alert" : "status"}
+        aria-live={variant === "error" ? "assertive" : "polite"}
+      >
         <Icon size={18} aria-hidden="true" />
         <span class="text-sm font-medium">{message}</span>
         <button

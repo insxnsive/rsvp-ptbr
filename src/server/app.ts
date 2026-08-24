@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cookie from "@fastify/cookie";
+import compress from "@fastify/compress";
 import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
@@ -15,6 +16,12 @@ import { registerEventRoutes } from "./routes/events.js";
 import { registerPublicRoutes } from "./routes/public.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export function staticCacheControl(filePath: string): string {
+  return filePath.replace(/\\/g, "/").includes("/assets/")
+    ? "public, max-age=31536000, immutable"
+    : "no-cache";
+}
 
 export type BuildAppOptions = {
   config: AppConfig;
@@ -45,6 +52,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
   });
   await app.register(cookie);
+  await app.register(compress, {
+    global: true,
+    encodings: ["br", "gzip"]
+  });
   await app.register(rateLimit, {
     max: 120,
     timeWindow: "1 minute"
@@ -66,7 +77,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   if (existsSync(path.join(clientRoot, "index.html"))) {
     await app.register(fastifyStatic, {
       root: clientRoot,
-      prefix: "/"
+      prefix: "/",
+      setHeaders: (response, filePath) => {
+        response.header("Cache-Control", staticCacheControl(filePath));
+      }
     });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith("/api")) {

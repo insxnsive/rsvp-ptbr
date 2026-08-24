@@ -13,24 +13,45 @@ type MobileSheetProps = {
 export default function MobileSheet({ open, title, children, onClose }: MobileSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     sheetRef.current?.focus();
 
     function handleKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab" && sheetRef.current) {
+        const focusable = sheetRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0]!;
+        const last = focusable[focusable.length - 1]!;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     }
 
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -44,7 +65,7 @@ export default function MobileSheet({ open, title, children, onClose }: MobileSh
     >
       <div
         ref={sheetRef}
-        class="animate-sheet max-h-[90dvh] w-full overflow-hidden rounded-t-2xl bg-white shadow-2xl"
+        class="glass-sheet animate-sheet max-h-[90dvh] w-full overflow-hidden rounded-t-2xl"
         tabindex={-1}
       >
         <div class="flex items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">

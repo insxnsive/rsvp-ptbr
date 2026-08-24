@@ -67,14 +67,18 @@ export default function GuestManager({
     return () => window.clearTimeout(timeout);
   }, [search]);
 
-  const loadGuests = useCallback(async () => {
-    const response = await api.guests(event.id, debouncedSearch, group);
+  const loadGuests = useCallback(async (signal?: AbortSignal) => {
+    const response = await api.guests(event.id, debouncedSearch, group, signal);
     setGuests(response.guests);
     setStats(response.stats);
   }, [event.id, group, debouncedSearch]);
 
   useEffect(() => {
-    void loadGuests().catch((error) => onToast(apiMessage(error), "error"));
+    const controller = new AbortController();
+    void loadGuests(controller.signal).catch((error) => {
+      if (!controller.signal.aborted) onToast(apiMessage(error), "error");
+    });
+    return () => controller.abort();
   }, [loadGuests, onToast]);
 
   useEffect(() => {
@@ -147,7 +151,7 @@ export default function GuestManager({
 
   if (!desktop && mobileView) {
     return (
-      <section class="animate-rise mt-4 min-w-0" role="tabpanel">
+      <section class="animate-rise mt-4 min-w-0" id="admin-workspace-panel" role="tabpanel">
         {mobileView === "guests" ? (
           <>
             <div class="grid grid-cols-3 gap-2">
@@ -188,12 +192,12 @@ export default function GuestManager({
               <GroupChips value={group} onChange={setGroup} counts={groupCounts} />
             </div>
 
-            <div class="mt-4 max-h-[52dvh] space-y-2 overflow-y-auto overscroll-contain pr-1" role="list">
+            <div class="mt-4 space-y-2" role="list">
               {visibleGuests.map((guest) => {
                 const statusVariant = guest.checkedInAt ? "success" : guest.rsvpAt ? "info" : "default";
                 const statusText = guest.checkedInAt ? "Presente" : guest.rsvpAt ? "Confirmado" : "Pendente";
                 return (
-                  <article class="flex items-center justify-between gap-3 rounded-xl bg-white p-3 shadow-sm" key={guest.id}>
+                  <article class="flex items-center justify-between gap-3 rounded-xl bg-white p-3 shadow-sm" role="listitem" key={guest.id}>
                     <div class="flex min-w-0 items-center gap-3">
                       <div class={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white ${
                         guest.group === "adulto" ? "bg-teal-600" : "bg-amber-500"
@@ -320,7 +324,7 @@ export default function GuestManager({
           <input
             class="w-full rounded-xl border border-dashed border-stone-300 bg-white p-3 text-sm"
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.csv"
             onChange={(e) => setFile(e.currentTarget.files?.[0] ?? null)}
           />
           <div class="mt-3 grid grid-cols-2 gap-2">
@@ -490,11 +494,11 @@ export default function GuestManager({
         </form>
       </CollapsiblePanel>
 
-      <CollapsiblePanel icon={Upload} title="Importar lista" summary="Excel, XLS ou CSV">
+      <CollapsiblePanel icon={Upload} title="Importar lista" summary="Excel ou CSV">
         <input
           class="w-full rounded-xl border border-dashed border-stone-300 bg-white p-3 text-sm"
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept=".xlsx,.csv"
           onChange={(e) => setFile(e.currentTarget.files?.[0] ?? null)}
         />
         <div class="mt-3 grid grid-cols-2 gap-2">
@@ -555,7 +559,7 @@ export default function GuestManager({
             const statusVariant = guest.checkedInAt ? "success" : guest.rsvpAt ? "info" : "default";
             const statusText = guest.checkedInAt ? "Presente" : guest.rsvpAt ? "Confirmado" : "Pendente";
             return (
-              <article class="flex items-center justify-between gap-3 rounded-xl bg-white p-3 shadow-sm" key={guest.id}>
+              <article class="flex items-center justify-between gap-3 rounded-xl bg-white p-3 shadow-sm" role="listitem" key={guest.id}>
                 <div class="flex min-w-0 items-center gap-3">
                   <div class={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white ${
                     guest.group === "adulto" ? "bg-teal-600" : "bg-amber-500"

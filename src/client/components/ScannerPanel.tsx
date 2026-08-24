@@ -11,9 +11,48 @@ type Props = {
 
 export default function ScannerPanel({ active, onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const onScanRef = useRef(onScan);
+  const onCloseRef = useRef(onClose);
   onScanRef.current = onScan;
+  onCloseRef.current = onClose;
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!active) return undefined;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    sectionRef.current?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab" && sectionRef.current) {
+        const focusable = sectionRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0]!;
+        const last = focusable[focusable.length - 1]!;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus();
+    };
+  }, [active]);
 
   useEffect(() => {
     if (!active) {
@@ -35,7 +74,7 @@ export default function ScannerPanel({ active, onScan, onClose }: Props) {
           delayBetweenScanSuccess: 1000,
           tryPlayVideoTimeout: 5000
         });
-        controls = await reader.decodeFromConstraints(
+        const nextControls = await reader.decodeFromConstraints(
           {
             audio: false,
             video: {
@@ -57,6 +96,11 @@ export default function ScannerPanel({ active, onScan, onClose }: Props) {
             }
           }
         );
+        if (disposed) {
+          nextControls.stop();
+          return;
+        }
+        controls = nextControls;
       } catch {
         if (!disposed) {
           setError("Nao foi possivel abrir a camera.");
@@ -76,7 +120,14 @@ export default function ScannerPanel({ active, onScan, onClose }: Props) {
   }
 
   return (
-    <section class="animate-fade fixed inset-0 z-50 h-[100dvh] w-[100dvw] overflow-hidden bg-black/92">
+    <section
+      ref={sectionRef}
+      class="animate-fade fixed inset-0 z-50 h-[100dvh] w-[100dvw] overflow-hidden bg-black/92"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Scanner QR"
+      tabindex={-1}
+    >
       <div class="animate-sheet relative flex h-full min-h-[100svh] flex-col">
         <div class="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 px-4 py-5 text-white">
           <div class="flex items-center gap-2 text-sm font-semibold">

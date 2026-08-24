@@ -40,4 +40,24 @@ describe("client api", () => {
     expect(init.method).toBe("POST");
     expect(init.headers).toMatchObject({ "Content-Type": "application/json" });
   });
+
+  it("cancels a guest search when its caller aborts", async () => {
+    const externalController = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url, initValue) => {
+      const init = initValue as RequestInit;
+      requestSignal = init.signal ?? undefined;
+      return new Promise<MockResponse>((_resolve, reject) => {
+        requestSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+          once: true
+        });
+      });
+    });
+
+    const request = api.publicGuests("casamento", "ana", externalController.signal);
+    externalController.abort();
+
+    await expect(request).rejects.toMatchObject({ message: "Requisicao cancelada.", status: 0 });
+    expect(requestSignal?.aborted).toBe(true);
+  });
 });

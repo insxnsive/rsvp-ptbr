@@ -9,6 +9,7 @@ import TopBar from "./TopBar.js";
 import Toast from "./ui/Toast.js";
 import ConfirmDialog from "./ui/ConfirmDialog.js";
 import MobileSheet from "./ui/MobileSheet.js";
+import MobileBottomNav from "./MobileBottomNav.js";
 import { useEventSelection } from "../hooks/useEventSelection.js";
 import { useDesktopLayout } from "../hooks/useDesktopLayout.js";
 import { apiMessage, formatEventWindow } from "../utils.js";
@@ -63,7 +64,7 @@ export default function AdminDashboard({ logout }: { logout: () => Promise<void>
   return (
     <>
       <TopBar title="Administracao" subtitle="Eventos, convidados e links publicos" onLogout={logout} />
-      <main class="mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[360px_1fr]">
+      <main class="mobile-nav-space mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[360px_1fr]">
         <aside class="hidden space-y-4 lg:block">
           <CollapsiblePanel icon={Calendar} title="Novo evento" summary="Crie um link publico para compartilhar" defaultOpen>
             <EventFormPanel
@@ -100,7 +101,7 @@ export default function AdminDashboard({ logout }: { logout: () => Promise<void>
         </aside>
         <div class="min-w-0">
           {!desktop ? (
-            <section class="soft-panel rounded-xl p-3">
+            <section class="glass-control rounded-xl p-3">
               <div class="flex items-center justify-between gap-2">
                 <button
                   class="touch-button min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-left"
@@ -138,6 +139,8 @@ export default function AdminDashboard({ logout }: { logout: () => Promise<void>
                     }`}
                     type="button"
                     role="tab"
+                    id="admin-guests-tab"
+                    aria-controls="admin-workspace-panel"
                     aria-selected={mobileView === "guests"}
                     onClick={() => setMobileView("guests")}
                   >
@@ -150,6 +153,8 @@ export default function AdminDashboard({ logout }: { logout: () => Promise<void>
                     }`}
                     type="button"
                     role="tab"
+                    id="admin-event-tab"
+                    aria-controls="admin-workspace-panel"
                     aria-selected={mobileView === "event"}
                     onClick={() => setMobileView("event")}
                   >
@@ -190,6 +195,7 @@ export default function AdminDashboard({ logout }: { logout: () => Promise<void>
           )}
         </div>
       </main>
+      <MobileBottomNav currentPath="/rsvp" eventSlug={selected?.slug} />
 
       {toast ? (
         <Toast message={toast.message} variant={toast.variant} onDismiss={dismissToast} />

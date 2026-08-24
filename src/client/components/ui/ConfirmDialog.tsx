@@ -25,13 +25,21 @@ export default function ConfirmDialog({
   onCancel
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCancelRef = useRef(onCancel);
+  const loadingRef = useRef(loading);
+  onCancelRef.current = onCancel;
+  loadingRef.current = loading;
 
   useEffect(() => {
     if (!open) return undefined;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     dialogRef.current?.focus();
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onCancel();
+      if (e.key === "Escape" && !loadingRef.current) {
+        onCancelRef.current();
         return;
       }
       if (e.key === "Tab" && dialogRef.current) {
@@ -51,8 +59,12 @@ export default function ConfirmDialog({
       }
     }
     document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [open, onCancel]);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus();
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -67,7 +79,7 @@ export default function ConfirmDialog({
   return (
     <div
       class="animate-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      onClick={(e) => { if (!loading && e.target === e.currentTarget) onCancel(); }}
       role="dialog"
       aria-modal="true"
       aria-label={title}

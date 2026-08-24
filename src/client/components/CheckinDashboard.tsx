@@ -23,6 +23,7 @@ import StatCard from "./StatCard.js";
 import TopBar from "./TopBar.js";
 import Toast from "./ui/Toast.js";
 import MobileSheet from "./ui/MobileSheet.js";
+import MobileBottomNav from "./MobileBottomNav.js";
 import GroupChips from "./GroupChips.js";
 import { emptyStats, formatEventWindow, formatRelativeTime, getInitials, groupLabel } from "../utils.js";
 import { useEventSelection } from "../hooks/useEventSelection.js";
@@ -65,9 +66,9 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
     return () => window.clearTimeout(timeout);
   }, [search]);
 
-  const loadGuests = useCallback(async () => {
+  const loadGuests = useCallback(async (signal?: AbortSignal) => {
     if (!selectedId) return;
-    const response: GuestsResponse = await api.guests(selectedId, debouncedSearch, group);
+    const response: GuestsResponse = await api.guests(selectedId, debouncedSearch, group, signal);
     const sorted = [...response.guests].sort((a, b) => {
       if (a.checkedInAt && b.checkedInAt) return b.checkedInAt.localeCompare(a.checkedInAt);
       if (a.checkedInAt) return -1;
@@ -79,7 +80,13 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
   }, [group, debouncedSearch, selectedId]);
 
   useEffect(() => {
-    void loadGuests().catch((error) => setToast({ message: error instanceof ApiError ? error.message : "Erro.", variant: "error" }));
+    const controller = new AbortController();
+    void loadGuests(controller.signal).catch((error) => {
+      if (!controller.signal.aborted) {
+        setToast({ message: error instanceof ApiError ? error.message : "Erro.", variant: "error" });
+      }
+    });
+    return () => controller.abort();
   }, [loadGuests]);
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -150,6 +157,7 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
             ? "bg-emerald-50"
             : "bg-white"
       }`}
+      role="listitem"
       key={guest.id}
     >
       <div class="flex min-w-0 items-center gap-3">
@@ -182,7 +190,7 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
   return (
     <>
       <TopBar title="Check-in" subtitle="Busca, filtros, confirmacao manual e QRCode" onLogout={logout} />
-      <main class="mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[360px_1fr]">
+      <main class="mobile-nav-space mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[360px_1fr]">
         <aside class="hidden space-y-4 lg:block">
           <a
             class="touch-button inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-semibold text-stone-700 shadow-sm"
@@ -238,7 +246,7 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
         </aside>
         <div class="min-w-0">
           {!desktop ? (
-            <section class="soft-panel rounded-xl p-3">
+            <section class="glass-control rounded-xl p-3">
               <div class="flex items-center justify-between gap-2">
                 <button
                   class="touch-button min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-left"
@@ -253,11 +261,11 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
                 </button>
               </div>
               <div class="mt-3 grid grid-cols-2 gap-2" role="tablist" aria-label="Area de check-in">
-                <button class={`touch-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${mobileView === "list" ? "bg-teal-700 text-white" : "bg-white text-stone-700"}`} type="button" role="tab" aria-selected={mobileView === "list"} onClick={() => setMobileView("list")}>
+                <button class={`touch-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${mobileView === "list" ? "bg-teal-700 text-white" : "bg-white text-stone-700"}`} type="button" role="tab" id="checkin-list-tab" aria-controls="checkin-workspace-panel" aria-selected={mobileView === "list"} onClick={() => setMobileView("list")}>
                   <List size={17} aria-hidden="true" />
                   Entrada
                 </button>
-                <button class={`touch-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${mobileView === "event" ? "bg-teal-700 text-white" : "bg-white text-stone-700"}`} type="button" role="tab" aria-selected={mobileView === "event"} onClick={() => setMobileView("event")}>
+                <button class={`touch-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${mobileView === "event" ? "bg-teal-700 text-white" : "bg-white text-stone-700"}`} type="button" role="tab" id="checkin-event-tab" aria-controls="checkin-workspace-panel" aria-selected={mobileView === "event"} onClick={() => setMobileView("event")}>
                   <Settings2 size={17} aria-hidden="true" />
                   Evento
                 </button>
@@ -266,7 +274,7 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
           ) : null}
 
           {!desktop ? (
-            <section class="animate-rise mt-4 min-w-0" role="tabpanel">
+            <section class="animate-rise mt-4 min-w-0" id="checkin-workspace-panel" role="tabpanel">
               {mobileView === "list" ? (
                 <>
                   <div class="grid grid-cols-3 gap-2">
@@ -285,7 +293,7 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
                     </label>
                     <GroupChips value={group} onChange={setGroup} counts={groupCounts} />
                   </div>
-                  <div class="mt-4 max-h-[48dvh] space-y-2 overflow-y-auto overscroll-contain pr-1" role="list">
+                  <div class="mt-4 space-y-2" role="list">
                     {guestRows}
                   </div>
                 </>
@@ -322,13 +330,16 @@ export default function CheckinDashboard({ logout }: { logout: () => Promise<voi
           )}
         </div>
       </main>
+      <MobileBottomNav currentPath="/rsvp-confirm" eventSlug={selected?.slug} />
 
       {toast ? (
         <Toast message={toast.message} variant={toast.variant} onDismiss={dismissToast} />
       ) : null}
-      <Suspense fallback={null}>
-        <ScannerPanel active={scannerActive} onScan={scan} onClose={() => setScannerActive(false)} />
-      </Suspense>
+      {scannerActive ? (
+        <Suspense fallback={null}>
+          <ScannerPanel active onScan={scan} onClose={() => setScannerActive(false)} />
+        </Suspense>
+      ) : null}
       <MobileSheet open={eventPickerOpen} title="Eventos" onClose={() => setEventPickerOpen(false)}>
         <div class="space-y-2">
           {events.map((event) => (

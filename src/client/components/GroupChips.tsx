@@ -12,7 +12,7 @@ export default function GroupChips({ value, onChange, counts }: GroupChipsProps)
   ];
 
   return (
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap gap-2" aria-label="Filtrar por grupo">
       {options.map((opt) => (
         <button
           key={opt.key}
@@ -23,6 +23,7 @@ export default function GroupChips({ value, onChange, counts }: GroupChipsProps)
               : "border border-stone-200 bg-white text-stone-700 hover:border-teal-200 hover:bg-teal-50"
           }`}
           onClick={() => onChange(opt.key)}
+          aria-pressed={value === opt.key}
         >
           {opt.label}
           {opt.count !== undefined ? (
