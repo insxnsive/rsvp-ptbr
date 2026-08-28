@@ -1,6 +1,8 @@
 # RSVP
 RSVP is an event guest management application.
 
+**Languages:** [English](#rsvp) | [Português brasileiro](#rsvp-em-português-brasileiro)
+
 An administrator can create events and manage guest lists.
 Guests can confirm attendance on a public event page.
 The application creates a signed QR code after confirmation.
@@ -231,3 +233,245 @@ The suite does not require a MongoDB instance.
 ## License
 
 See [LICENSE](LICENSE).
+
+---
+
+## RSVP em português brasileiro
+
+RSVP é uma aplicação para gerenciamento de convidados de eventos.
+
+Um administrador pode criar eventos e gerenciar listas de convidados.
+Os convidados podem confirmar presença em uma página pública do evento.
+A aplicação cria um QR Code assinado depois da confirmação.
+O administrador pode usar o QR Code para fazer o check-in.
+
+### Funções principais
+
+- Criar, alterar e excluir eventos.
+- Adicionar, alterar, excluir e importar convidados.
+- Buscar convidados sem exigir acentos.
+- Confirmar presença por um link público do evento.
+- Criar e baixar um QR Code para cada convidado confirmado.
+- Registrar o check-in por QR Code ou por seleção manual.
+- Desfazer um check-in.
+- Exibir estatísticas do evento e dos grupos.
+
+A aplicação usa uma única conta de administrador.
+Ela não oferece contas de usuário, perfis, redefinição de senha nem restauração de eventos.
+
+### Arquitetura do sistema
+
+O servidor é uma aplicação Fastify.
+O cliente é uma aplicação single-page em Preact.
+O Vite gera os arquivos do cliente.
+O MongoDB armazena eventos, convidados e logs de check-in.
+
+O servidor de produção serve a API e os arquivos gerados do cliente.
+O cliente de desenvolvimento usa um proxy para as requisições em `/api`.
+
+| Parte | Localização | Finalidade |
+| --- | --- | --- |
+| Servidor | `src/server` | Rotas da API, autenticação, armazenamento, validação de QR Code e importações. |
+| Cliente | `src/client` | Páginas administrativas, página pública de RSVP e scanner de QR Code. |
+| Compartilhado | `src/shared` | Tipos do domínio e normalização de texto. |
+| Testes | `tests` | Testes da API, do cliente, de QR Code, de importação, de configuração e de normalização. |
+
+`AppStore` define a interface de armazenamento.
+`MongoStore` é a implementação usada em produção.
+`MemoryStore` é usada nos testes da API.
+
+### Requisitos
+
+- Node.js 22 ou posterior.
+- Um banco MongoDB.
+- Um nome de usuário de administrador e um hash de senha.
+- Dois valores secretos com pelo menos 32 caracteres cada.
+
+### Instalação e configuração
+
+Instale as dependências do pacote.
+
+```bash
+npm install
+```
+
+Crie um arquivo `.env` na raiz do projeto.
+
+```dotenv
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DB=rsvp
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH=scrypt$...
+SESSION_SECRET=replace-with-a-secret-of-at-least-32-characters
+QR_SIGNING_SECRET=replace-with-a-different-secret-of-at-least-32-characters
+PUBLIC_BASE_URL=http://127.0.0.1:5173
+```
+
+Gere o hash da senha com este comando.
+
+```bash
+npm run hash:password
+```
+
+Defina `ADMIN_PASSWORD_HASH` com o valor gerado.
+
+Não use os valores secretos de exemplo em um sistema implantado.
+
+### Configuração
+
+| Variável | Obrigatória | Descrição |
+| --- | --- | --- |
+| `MONGODB_URI` | Sim | String de conexão do MongoDB. |
+| `MONGODB_DB` | Sim | Nome do banco de dados MongoDB. |
+| `ADMIN_USERNAME` | Sim | Nome da conta de administrador. |
+| `ADMIN_PASSWORD_HASH` | Sim | Hash de senha usando scrypt. |
+| `SESSION_SECRET` | Sim | Segredo usado para assinar a sessão. Deve conter pelo menos 32 caracteres. |
+| `QR_SIGNING_SECRET` | Sim | Segredo usado para assinar QR Codes. Deve conter pelo menos 32 caracteres. |
+| `PUBLIC_BASE_URL` | Sim | URL base pública dos links dos eventos. |
+| `HOST` | Não | Endereço de bind do servidor. O padrão é `0.0.0.0`. |
+| `PORT` | Não | Porta do servidor. O padrão é `8080`. |
+| `NODE_ENV` | Não | Use `production` em sistemas implantados. |
+
+O servidor carrega `.env` quando o arquivo existe.
+O servidor remove uma barra final de `PUBLIC_BASE_URL`.
+
+### Como executar a aplicação
+
+Inicie o servidor da API e o servidor de desenvolvimento do cliente.
+
+```bash
+npm run dev
+```
+
+Use `http://127.0.0.1:5173` para acessar o cliente.
+O servidor da API escuta na porta `8080`.
+
+Gere o build da aplicação para produção.
+
+```bash
+npm run build
+```
+
+Inicie o servidor de produção depois que o build terminar.
+
+```bash
+npm start
+```
+
+O build cria `dist/client` e `dist/server`.
+
+### Páginas da aplicação
+
+| Caminho | Acesso | Finalidade |
+| --- | --- | --- |
+| `/rsvp` | Administrador | Gerenciar eventos e convidados. |
+| `/rsvp-confirm` | Administrador | Registrar e desfazer check-ins. |
+| `/:slug` | Público | Buscar convidados e confirmar presença. |
+
+A página pública não retorna convidados até que a busca tenha dois caracteres.
+A busca pública retorna no máximo 20 convidados.
+
+### Fluxo do administrador
+
+1. Entre em uma página administrativa.
+2. Crie um evento.
+3. Adicione convidados ou importe um arquivo de convidados.
+4. Envie o link público do evento aos convidados.
+5. Abra a página de check-in durante o evento.
+6. Escaneie QR Codes ou selecione convidados para fazer o check-in manualmente.
+
+O sistema mantém eventos e convidados excluídos como registros marcados para exclusão lógica.
+O sistema não oferece uma operação de restauração.
+
+### Importação de convidados
+
+A rota de importação aceita arquivos XLSX e CSV.
+O limite de upload é um arquivo com tamanho máximo de 5 MB.
+
+Use uma coluna de nome e uma coluna opcional de grupo.
+A coluna de nome pode usar estes títulos:
+
+- `Convidados`
+- `Convidado`
+- `Nome`
+- `Nomedoconvidado`
+
+A coluna de grupo pode usar estes títulos:
+
+- `Grupo`
+- `Tipo`
+- `Categoria`
+
+Os grupos válidos são `adulto` e `crianca`.
+O importador também aceita os nomes dos grupos no plural.
+
+A operação de importação usa o modo de pré-visualização por padrão.
+Envie `dryRun=false` somente depois de corrigir todos os erros de linha informados.
+
+### QR Code e check-in
+
+O sistema cria um token QR assinado depois que o convidado confirma presença.
+O token inclui o ID do evento, o ID do convidado e um nonce estável do convidado.
+
+O servidor verifica a assinatura do token durante o check-in por QR Code.
+Ele também verifica o ID do evento e o nonce do convidado.
+Esse processo rejeita tokens alterados ou substituídos.
+
+O sistema registra leituras duplicadas sem alterar o horário do primeiro check-in.
+Cada check-in manual, check-in por QR Code e operação de desfazer cria um registro de log.
+
+### Resumo da API
+
+Todas as rotas da API começam com `/api`.
+
+| Rota | Acesso | Finalidade |
+| --- | --- | --- |
+| `POST /auth/login` | Público | Criar uma sessão de administrador. |
+| `GET /auth/session` | Público | Obter o estado atual da sessão. |
+| `POST /auth/logout` | Público | Excluir o cookie da sessão. |
+| `GET`, `POST /events` | Administrador | Listar ou criar eventos. |
+| `PATCH`, `DELETE /events/:id` | Administrador | Alterar ou excluir um evento. |
+| `GET`, `POST /events/:id/guests` | Administrador | Listar ou adicionar convidados. |
+| `PATCH`, `DELETE /events/:id/guests/:guestId` | Administrador | Alterar ou excluir um convidado. |
+| `POST /events/:id/guests/import` | Administrador | Pré-visualizar ou importar um arquivo de convidados. |
+| `POST /events/:id/checkins/manual` | Administrador | Registrar um check-in manual. |
+| `POST /events/:id/checkins/qr` | Administrador | Registrar um check-in por QR Code. |
+| `DELETE /events/:id/checkins/:guestId` | Administrador | Desfazer um check-in. |
+| `GET /public/events/:slug` | Público | Obter informações públicas do evento. |
+| `GET /public/events/:slug/guests` | Público | Buscar convidados publicamente. |
+| `POST /public/events/:slug/confirm` | Público | Confirmar um convidado e obter um token QR. |
+
+As rotas administrativas exigem o cookie `rsvp_session`.
+O cookie é HTTP-only e usa `SameSite=Strict`.
+O cookie de produção também usa o atributo `Secure`.
+A sessão expira depois de 12 horas.
+
+### Segurança e limites
+
+- O servidor usa cabeçalhos de segurança do Helmet.
+- O padrão é de 120 requisições por minuto.
+- A rota de login permite cinco requisições por minuto.
+- O limite do corpo da requisição é de 1 MB.
+- O servidor não habilita CORS.
+- O texto de eventos e convidados passa por validação de tamanho no servidor.
+- O MongoDB mantém índices para consultas de eventos, convidados e check-ins.
+
+Use HTTPS em qualquer sistema implantado.
+
+### Verificações de qualidade
+
+Execute estes comandos antes da implantação.
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+A suíte de testes usa um armazenamento em memória nos testes da API.
+A suíte não exige uma instância do MongoDB.
+
+### Licença
+
+Consulte [LICENSE](LICENSE).
